@@ -1,7 +1,7 @@
 """自检器（verifier.py）的测试。
 
-自检是修复 Agent 的"刹车"：改错了必须能被拦下。这组用例同时覆盖两种引擎
-（codeguard / 内置计数器），因为降级路径同样会被真实用户走到。
+自检是修复 Agent 的刹车，改错了得能被拦下。这组用例两种引擎都跑（codeguard 和内置
+计数器），因为降级路径真实用户也会走到。
 """
 
 from __future__ import annotations

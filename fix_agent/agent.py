@@ -1,16 +1,10 @@
-"""
-FixAgent 主体：按审查发现，逐条改写代码，并且每一处改写都要过自检。
+"""FixAgent 主体：按审查发现改写代码，每处改写都要先自检。
 
-流程（对每个文件）：
+单个文件的流程是把该文件的发现按行号从大到小排好，逐条改写，每次改写都用内存里的候选
+源码过自检（能编译、目标规则命中数下降、没有新的阻断级问题），三条全过才写回。
 
-1. 读到内存（**先不写盘**）；
-2. 把该文件的发现**按行号从大到小**排序 —— 这是关键工程细节，见下方说明；
-3. 逐条：查修补器 → 改写 → 自检（语法 + 规则数下降 + 无新增阻断级）；
-4. 全部处理完才写回文件，并生成 unified diff。
-
-为什么按行号**从大到小**处理：任何一次改写都可能插入或删除行。如果从前往后改，
-第二处改动的行号就失效了，修补器会定位到错的代码上 —— 而且它不会报错，只会**静静地
-改错地方**。倒序处理让"尚未处理的行号"始终有效，这是个不需要额外维护偏移表的办法。
+行号会漂移：改写可能插删行，没处理的发现拿旧行号去定位就会改到别的代码上，多半还不报
+错，所以每次改写后都重算一遍剩余行号（``_remap_pending``）。
 """
 
 from __future__ import annotations
@@ -184,7 +178,7 @@ class FixAgent:
         original = path.read_text(encoding="utf-8")
         current = original
         records: list[PatchRecord] = []
-        #: 报告里的行号一律用**审查报告里的原始行号**，避免读者拿它去当前文件里定位时错位
+        #: 报告里的行号一律用审查报告里的原始行号，免得读者拿去当前文件里定位时错位
         original_lines = {f.finding_id: f.line for f in findings}
 
         # 行号从大到小，保证"还没处理的行号"尽量少受影响（仍不够，见下方 remap）
@@ -247,7 +241,7 @@ class FixAgent:
             record.after = patch.after
             records.append(record)
             # 改写可能插入/删除行（尤其是模块级 import 与 logger），
-            # 因此立刻把**剩余待处理发现**的行号换算到新源码上
+            # 所以立刻把剩余待处理发现的行号换算到新源码上
             current = self._remap_pending(current, patch.source, pending)
 
         if current != original and not dry_run:
@@ -266,13 +260,13 @@ class FixAgent:
         """
         把剩余待处理发现的行号换算到新源码上，并返回新源码。
 
-        为什么必须做：修补器本身只动"自己那一行"，但补模块级 ``import logging`` /
-        ``logger = ...`` 会插在文件顶部，把后面所有行号整体顶下去。不重算行号的话，
-        下一条发现就会拿着旧行号去定位 —— 而修补器不会报错，它会在错误的行上"成功"地
-        改掉一段无关代码。这类 bug 最贵，因为它看起来一切正常。
+        这一步必须做：修补器只动"自己那一行"，但补模块级 ``import logging`` /
+        ``logger = ...`` 会插在文件顶部，把后面所有行号整体顶下去。不重算的话，下一条
+        发现会拿着旧行号去定位，而修补器不会报错，它会在错误的行上"成功"地改掉一段
+        无关代码，看起来一切正常。
 
-        换算用的是 :func:`fix_agent.source.line_mapping` 的整篇行级对齐；对不上的行
-        （说明该行已被删除）把行号置空，后续会明确记为"位置失效，转人工"。
+        换算用 :func:`fix_agent.source.line_mapping` 的整篇行级对齐。对不上的行说明
+        该行已被删除，行号置空，后面会明确记成"位置失效，转人工"。
         """
         if not pending:
             return after
@@ -314,11 +308,10 @@ class FixAgent:
         dry_run: bool,
     ) -> FileFix:
         """
-        让模型整文件重写，然后走**同一套自检**。
+        让模型整文件重写，然后走同一套自检。
 
-        这是本 Agent 的核心主张：不管改写的来源是规则还是模型，通过的标准都一样 ——
-        语法必须正确、目标规则必须真的不再命中、不能引入新的阻断级问题。模型说得再好，
-        过不了自检就不落地。
+        规则改的、模型改的，落地标准一样：语法得对、目标规则得真的不再命中、不能引入
+        新的阻断级问题。模型说得再好，过不了自检就不落地。
         """
         path = self._safe_path(root, relative)
         if path is None or not path.is_file():
@@ -428,7 +421,7 @@ class FixAgent:
 
     @staticmethod
     def _safe_path(root: Path, relative: str) -> Path | None:
-        """只允许改动工作区内的文件 —— 与 coding_agent 的路径沙箱同一思路。"""
+        """只允许改动工作区内的文件，跟 coding_agent 的路径沙箱是同一个思路。"""
         if not relative:
             return None
         candidate = Path(relative)

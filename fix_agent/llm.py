@@ -1,13 +1,9 @@
-"""
-LLM 接入层（``engine=llm`` 时使用），**只用标准库实现**。
+"""LLM 客户端（``engine=llm`` 时用），只用标准库实现。
 
-与 coding_agent / codeguard 不同，这里刻意不依赖 httpx：
+没引 httpx，因为规则级修补才是主路径，LLM 只是可选增强，为它引依赖就把"clone 下来就能
+跑"打折扣了。``urllib.request`` 发一个 JSON POST 就够。
 
-- 修复 Agent 的主路径是规则级修补器，LLM 是可选增强；
-- 为了一个可选能力引入第三方依赖，会让"clone 下来就能跑"这个目标打折；
-- ``urllib.request`` 打一个 JSON POST 已经足够，协议本来就是公开的。
-
-代价是要自己处理超时、错误码与重试，这些都是显式代码，反而更好排查。
+超时、错误码分类、退避重试只能自己写，但都是显式代码，反而好排查。
 """
 
 from __future__ import annotations

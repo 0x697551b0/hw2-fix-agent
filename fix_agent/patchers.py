@@ -1,16 +1,9 @@
-"""
-修补器注册表：每条可自动修复的规则配一个**保守**的改写策略。
+"""修补器注册表：每条可自动修的规则配一个保守的改写策略。
 
-设计原则（按重要性排序）：
-
-1. **宁可拒绝，不要猜**。拿不准就 ``PatchRefused``，把问题留给人工。一个会瞎改代码
-   的修复 Agent 比一个不改的修复 Agent 危险得多。
-2. **单点改写**。不动函数签名、不动对外契约、不动控制流结构。做不到就不做。
-3. **保留原意**。例如"宽泛 except"只补日志、不擅自加 ``raise`` —— 原来那个 ``return None``
-   可能是刻意设计的降级路径，删掉它会改变线上行为。
-4. **每一处改写都能解释**。每个 :class:`Patch` 都带 ``note`` 与前后片段，报告里直接展示。
-
-所有策略都基于 ``ast`` 定位 + 字符区间替换（见 ``source.py``），不引入第三方依赖。
+拿不准就 ``PatchRefused``，把问题留给人工，一个会瞎改代码的修复 Agent 比一个不改的危险
+得多。所以只做单点改写：不动签名、不动控制流，原意能保住就保住（宽泛 except 只补日志，
+不加 ``raise``）。所有策略都基于 ``ast`` 定位加字符区间替换（见 ``source.py``），不引
+第三方依赖。
 """
 
 from __future__ import annotations
@@ -46,23 +39,23 @@ SECRET_NAME_HINTS: tuple[str, ...] = ("password", "passwd", "secret", "token", "
 
 #: 不可自动修复的规则 → 理由（与审查 Agent 的 fixability 表保持一致，有契约测试比对）
 NOT_SUPPORTED_REASONS: dict[str, str] = {
-    "CG101": "动态执行是否必需属业务决策，需人工判断",
-    "CG102": "命令注入修复涉及调用方参数契约，需重新设计",
-    "CG103": "反序列化格式变更影响存量数据兼容性，需评估迁移",
-    "CG104": "关闭 TLS 校验有时是内网自签证书的权宜之计，需确认 CA 方案",
-    "CG107": "随机数用途（令牌/盐/采样）只有作者知道，不能盲目替换",
-    "CG108": "临时文件竞态需确认并发模型与清理策略",
-    "CG201": "裸 except 想吞掉什么异常只有作者清楚，自动改写会改变错误语义",
-    "CG205": "除数为 0 通常说明上游数据有问题，应在数据源头修",
-    "CG208": "finally 里的 return 改变控制流，属结构性改动",
-    "CG301": "函数过长需要重新划分职责，属设计决策",
-    "CG302": "嵌套过深需要提取函数，会改变模块结构",
-    "CG303": "参数过多需要引入聚合对象，会改变对外签名",
-    "CG304": "文档字符串必须描述真实意图，机器生成注释没有价值",
-    "CG305": "提取常量的命名与归属需要领域知识",
-    "CG307": "返回值类型需作者确认，猜错注解比没有注解更糟",
-    "CG401": "折行位置影响可读性，需人工斟酌",
-    "CG405": "语法错误需作者修复，机器无法推断原本想写什么",
+    "CG101": "动态执行是不是业务上真需要，只能人判断",
+    "CG102": "修命令注入得改调用方的参数约定，等于重新设计",
+    "CG103": "反序列化格式一改，存量数据能不能读得另外评估",
+    "CG104": "关掉 TLS 校验有时是内网自签证书的临时办法，得先确认 CA 方案",
+    "CG107": "随机数用在哪儿（令牌/盐/采样）只有作者知道，不能瞎换",
+    "CG108": "临时文件竞态要看并发模型和清理策略，代码里看不出来",
+    "CG201": "裸 except 想吞掉什么异常只有作者清楚，改了就把错误语义变了",
+    "CG205": "除数为 0 一般是上游数据脏，应该从源头修",
+    "CG208": "在 finally 里 return 属控制流结构问题，不是改一行能解决的",
+    "CG301": "函数太长要重新划分职责，这是设计决策",
+    "CG302": "嵌套太深要抽函数，模块结构会跟着变",
+    "CG303": "参数太多要引入聚合对象，对外签名就变了",
+    "CG304": "docstring 得写作者的真实意图，机器编出来的注释没意义",
+    "CG305": "常量提出来叫什么名字、放哪儿，需要领域知识",
+    "CG307": "返回类型得作者确认，注解猜错比不写更糟",
+    "CG401": "折行位置影响可读性，得人来定",
+    "CG405": "语法错误只能作者自己修，机器猜不出原本想写什么",
     "CG000": "元信息提示，不是代码问题",
 }
 
@@ -164,10 +157,10 @@ def _has_any_logger(tree: ast.AST) -> bool:
 
 def _prelude_offset(sm: SourceMap, tree: ast.AST) -> int:
     """
-    计算模块级 import 与 logger 的插入位置：**最后一个顶层 import 语句的末尾**。
+    计算模块级 import 与 logger 的插入位置：最后一个顶层 import 语句的末尾。
 
-    刻意插在这里（而不是"跳过后续空行再插"）：空行属于原有排版，插在 import 之后的
-    第一行能保证新 import 紧挨着 import 组，原有的两行空行仍然留在组的末尾。
+    插在这里，不往后找空行：空行属于原有排版，插在 import 之后第一行能让新 import
+    紧挨着 import 组，原有的两行空行还留在组的末尾。
     """
     body = list(getattr(tree, "body", []))
     last_import: ast.stmt | None = None
@@ -306,7 +299,7 @@ class ParameterizeSql(Patcher):
         sm = SourceMap(source)
         tree = parse(source)
 
-        # 情形一：execute(f"... {x} ...") —— 直接内联插值
+        # 情形一：execute(f"... {x} ...") 直接内联插值
         inline = [c for c in node_at_line(tree, lineno, (ast.Call,)) if _is_sql_call(c)]
         if inline:
             call = inline[-1]
@@ -314,7 +307,7 @@ class ParameterizeSql(Patcher):
             if patch is not None:
                 return patch
 
-        # 情形二：sql = f"..."; execute(sql) —— 变量间接传参
+        # 情形二：sql = f"..."; execute(sql) 变量间接传参
         patch = self._indirect(tree, sm, source, lineno)
         if patch is not None:
             return patch
@@ -766,10 +759,10 @@ def _env_var_name(name: str) -> str:
 
 
 def _is_interpolated(node: ast.AST | None) -> bool:
-    """判断一个表达式是否是"把值插进字符串"的写法（f-string 或 % 格式化）。
+    """判断表达式是不是"把值插进字符串"的写法（f-string 或 % 格式化）。
 
-    codeguard 的 CG106 同时识别这两种形态，修补器也必须同时识别 ——
-    只认 f-string 会出现"审查报了、修复说不会修"的尴尬。
+    codeguard 的 CG106 两种形态都认，修补器也得都认。只认 f-string 就会出现
+    "审查报了、修复说不会修"的尴尬。
     """
     if isinstance(node, ast.JoinedStr):
         return True

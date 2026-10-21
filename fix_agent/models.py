@@ -18,7 +18,7 @@ FILE_UNCHANGED = "unchanged"
 
 @dataclass
 class PatchRecord:
-    """一条发现的处理记录。这是修复 Agent 最重要的输出：**每一轮都逐条交代**。"""
+    """一条发现的处理记录。每条发现都要有结论和理由，不允许静默丢弃。"""
 
     finding_id: str
     rule_id: str
@@ -26,12 +26,10 @@ class PatchRecord:
     line: int | None = None
     status: str = STATUS_SKIPPED
     strategy: str = ""
-    #: 为什么这么处理（成功时说明改了什么，拒绝时说明为什么不能自动改）
+    #: 为什么这么处理：成功时说明改了什么，拒绝时说明为什么不能自动改
     note: str = ""
-    #: 改写前后的关键片段，便于人工复核而不必打开整份文件
     before: str = ""
     after: str = ""
-    #: 自检结论
     verified: bool = False
 
     @property
@@ -96,7 +94,6 @@ class FixOutcome:
     engine: str = "rules"
     elapsed_seconds: float = 0.0
     diagnostics: dict[str, Any] = field(default_factory=dict)
-    #: 自检汇总
     verification: dict[str, Any] = field(default_factory=dict)
 
     # 聚合视图
@@ -125,7 +122,7 @@ class FixOutcome:
         return "".join(f.unified_diff for f in self.files if f.changed)
 
     def summary(self) -> str:
-        """一句话结论。"""
+        """给终端看的一行结论。"""
         if not self.changed_files:
             reasons = len(self.rejected) + len(self.deferred)
             return (

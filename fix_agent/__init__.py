@@ -1,8 +1,7 @@
-"""
-FixAgent —— 修复 Agent。
+"""修复 Agent。
 
-定位：Homework 2「代码审查流程」工作流的**第三个节点**。
-职责：按审查 Agent 给的结构化发现改写代码，并**自证**每一处改写是安全的。
+Homework 2 工作流里"编码 → 审查 → 修复"的第三个节点，按审查 Agent 的发现改写源码，
+每一处改写都要先证明是安全的。
 
     from fix_agent import FixAgent, FixConfig
 

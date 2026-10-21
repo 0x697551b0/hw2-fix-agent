@@ -1,17 +1,10 @@
-"""
-源码编辑原语：把 AST 节点的位置精确映射回文本区间。
+"""源码编辑原语：把 AST 节点的位置精确映射到文本区间。
 
-为什么不用现成的代码改写库（libcst / rope）：
+没用 libcst / rope 这类保留格式的改写库：本次要改的都是局部单点（一个表达式、一条语句、
+一行 import），靠 AST 加字符区间拼接就够了，还不用引依赖。
 
-- 作业要求"零第三方依赖"能跑，而这两个库都不在标准库里；
-- 本次要做的都是**局部、单点**改写（一个表达式、一个语句、一个导入），
-  AST + 文本区间足够，不需要完整的格式保留式重写；
-- 手写这 150 行换来的是"完全知道自己改了哪几个字符"，出问题时能精确解释，
-  这对一个会给别人代码打补丁的 Agent 来说是必需的。
-
-**关键陷阱：``col_offset`` 是 UTF-8 字节偏移，不是字符偏移。**
-源码里有中文时（注释、docstring、字符串字面量），直接用 ``line[col_offset:]``
-会切在错误的位置。本模块统一做字节 → 字符的换算，这是踩过的坑。
+有个细节要小心：``col_offset`` 记的是 UTF-8 字节偏移，源码里有中文时直接切片就会切在
+多字节字符中间，所以本模块统一做字节到字符的换算。
 """
 
 from __future__ import annotations
@@ -27,7 +20,7 @@ class SpliceError(ValueError):
 
 @dataclass(frozen=True)
 class Edit:
-    """一处文本替换。``start`` / ``end`` 是**字符**偏移（左闭右开）。"""
+    """一处文本替换。``start`` / ``end`` 是字符偏移（左闭右开）。"""
 
     start: int
     end: int
@@ -115,12 +108,7 @@ def byte_col_to_char_col(line: str, byte_col: int) -> int:
 
 
 def apply_edits(source: str, edits: Iterable[Edit]) -> str:
-    """
-    一次性应用多处编辑。
-
-    实现要点：**按起点倒序**应用。这样前面区间的位置不会因为后面区间被替换而失效，
-    不需要维护偏移增量，也就不容易算错。
-    """
+    """一次性应用多处编辑。按起点倒序来，前面区间的下标就不会被后面的替换弄失效。"""
     ordered = sorted(edits, key=lambda e: (e.start, e.end), reverse=True)
     result = source
     last_start = len(source) + 1
@@ -141,7 +129,7 @@ def parse(source: str, *, filename: str = "<string>") -> ast.AST:
 
 
 def node_at_line(tree: ast.AST, lineno: int, types: tuple[type, ...] = (ast.AST,)) -> list[ast.AST]:
-    """找出**起始行**落在指定行的所有节点。"""
+    """找出起始行落在指定行的所有节点。"""
     found = [
         node
         for node in ast.walk(tree)
@@ -225,19 +213,17 @@ def dotted_name(node: ast.AST | None) -> str:
 
 
 def line_mapping(before: str, after: str) -> dict[int, int]:
-    """
-    计算 ``before`` 每一行在 ``after`` 中的新行号（1-based）。
+    """计算 ``before`` 每一行在 ``after`` 中的新行号（1-based）。
 
-    存在的理由是一个**真实踩到的 bug**：修补器大多只动自己那一行，但补 ``import
-    logging`` / ``logger = ...`` 这类模块级前置语句会插在文件很靠前的位置，把后面
-    所有行号整体顶下去。如果还拿旧行号去定位下一条发现，修补器会"静静地改错地方"。
+    这个函数是一个真踩到的 bug 逼出来的。修补器大多只动自己那一行，但补
+    ``import logging`` / ``logger = ...`` 这类模块级语句会插在文件很靠前的位置，
+    把后面所有行号整体顶下去；此时还拿旧行号去定位，修补器就会静静地改错地方。
 
-    用 ``difflib`` 做行级对齐而不是自己算增量：一个补丁可能同时删行和插行（例如把
-    ``open(); read(); close()`` 变成 ``with: read()``），增量法在这种地方必然算错，
-    而对齐算法不需要特判。
+    用 ``difflib`` 做行级对齐，不自己算增量：一个补丁可能同时删行和插行
+    （例如把 ``open(); read(); close()`` 变成 ``with: read()``），增量法在这种地方
+    必然算错，对齐算法不需要特判。
 
-    返回的字典只包含"能对上"的行；被删掉的行不在字典里，调用方据此判定"该发现的位置
-    已经消失，转人工"。
+    返回的字典只收能对上的行。被删掉的行不在里面，调用方据此判定"位置已经没了，转人工"。
     """
     import difflib
 

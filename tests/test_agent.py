@@ -1,8 +1,8 @@
 """FixAgent 的端到端测试。
 
-这组用例验证的是整条修复链路：**发现清单 → 逐条改写 → 自检 → 落盘 → 复验**。
-最关键的一条是 ``test_all_blocking_findings_cleared``：修完之后那个文件里不能再有
-任何可自动修复的规则命中，这是"闭环"的定义。
+跑的是整条链路：发现清单 → 逐条改写 → 自检 → 落盘 → 复验。
+其中 ``test_all_blocking_findings_cleared`` 是最要紧的一条，它要求修完之后文件里
+不能再有任何可自动修复的规则命中，我拿这个当"闭环"的定义。
 """
 
 from __future__ import annotations
@@ -174,9 +174,9 @@ def test_missing_target_raises() -> None:
 def test_line_shift_does_not_break_later_findings() -> None:
     """回归测试：前面的补丁插入行后，后续发现的行号必须被换算。
 
-    这是本项目踩到过最贵的 bug —— 修补器不会报错，它会在错误的行上"成功"地改掉无关代码。
-    CG202 会在文件顶部插入 import logging，把后面所有行号顶下去；如果没重算，
-    CG105（原本第 6 行）就会对不上。
+    这是本项目踩到过最贵的一个 bug：修补器不会报错，它会在错误的行上"成功"地改掉
+    无关代码。CG202 会在文件顶部插入 import logging，把后面所有行号顶下去；如果
+    没重算，CG105（原本第 6 行）就会对不上。
     """
     with tempdir() as tmp:
         write(tmp / "mod.py", buggy_source())

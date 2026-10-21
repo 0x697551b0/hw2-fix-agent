@@ -1,12 +1,10 @@
-"""
-定位 codeguard（**可选**依赖）。
+"""定位 codeguard（可选依赖）。
 
-与审查 Agent 不同，修复 Agent 对 codeguard 是"有则更好"：有它就能做权威的规则级自检，
-没有就降级为内置计数器。因此这里的查找全程"尽力而为"，找不到也不抛异常。
+修复 Agent 对 codeguard 的态度是"找得到就用"：有它做权威自检，没有就降级成内置计数器，
+全程不报错，找不到返回 ``None``。
 
-之所以在本仓库再写一份而不是 import 审查 Agent 的 ``locate``：三个 Agent 仓库必须能
-各自单独 clone、单独测试，不能因为"复用 60 行找包代码"而让仓库 3 依赖仓库 2。
-重复的部分刻意保持在最小（找包 + 加 sys.path），真正复杂的逻辑各自不同。
+这里的 import 是延迟导入，因为修复 Agent 要能单独 clone 下来跑；在 sys.path 上找包的
+逻辑也琐碎，藏在模块里比散在 ``agent.py`` 里好。
 """
 
 from __future__ import annotations

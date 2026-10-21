@@ -1,8 +1,8 @@
 """源码编辑原语（source.py）的测试。
 
-其中 ``test_column_offset_handles_chinese`` 是回归测试：``col_offset`` 是 **UTF-8 字节**
-偏移，不是字符偏移。源码里有中文时直接用 ``line[col:]`` 会切在多字节字符中间，
-改出来的代码是坏的 —— 而且不会报错，只会静静地改错地方。
+``test_column_offset_handles_chinese`` 是回归测试：``col_offset`` 是 UTF-8 字节偏移，
+不是字符偏移。源码里有中文时直接用 ``line[col:]`` 会切在多字节字符中间，改出来的
+代码是坏的，还不报错，只是静静地改错地方。
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def test_line_mapping_deletion_drops_lines() -> None:
 def test_line_mapping_identity() -> None:
     text = "a\nb\nc\n"
     mapping = line_mapping(text, text)
-    # split("\n") 会在末尾多出一个空行，所以是 4 行而不是 3 行
+    # split("\n") 会在末尾多出一个空行，所以这里是 4 行
     assert mapping == {1: 1, 2: 2, 3: 3, 4: 4}, mapping
 
 

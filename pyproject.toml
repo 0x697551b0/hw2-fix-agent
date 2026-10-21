@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "刘浩天", email = "934813156@qq.com" }]
 keywords = ["agent", "workflow", "auto-fix", "ast", "se2026"]
-#: 主路径（规则级修补器）**只用标准库**。engine=llm 也只是标准库 urllib。
+# 主路径（规则级修补器）只用标准库；engine=llm 走 urllib，也不带第三方包
 dependencies = []
 
 [project.optional-dependencies]
